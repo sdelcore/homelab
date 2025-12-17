@@ -1,0 +1,5 @@
+# Environment file with secrets
+.env
+
+# Config directories (backed up to NFS, not git)
+config/

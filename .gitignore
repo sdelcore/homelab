@@ -1,0 +1,33 @@
+# OpenTofu / Terraform
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+.terraform/
+.terraform.lock.hcl
+crash.log
+*.tfplan
+
+# Secrets
+*.pem
+*.key
+secrets/
+.env
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Nix/Direnv
+.direnv/
+.envrc
+result
