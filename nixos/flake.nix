@@ -102,21 +102,25 @@
             useUserPackages = true;
             backupFileExtension = "backup";
 
-            sharedModules = [
-              catppuccin.homeModules.catppuccin
-            ];
+            sharedModules = [ ];
 
-            users.sdelcore = { ... }: {
-              imports = [
-                "${sdelcore-nixos}/home/headless.nix"
+            users.sdelcore = { pkgs, ... }: {
+              home.username = "sdelcore";
+              home.homeDirectory = "/home/sdelcore";
+              home.stateVersion = "25.05";
+
+              # Basic packages for headless use
+              home.packages = with pkgs; [
+                htop
+                ripgrep
+                fd
+                jq
+                tree
               ];
 
-              # Override username (headless.nix uses a parameter)
-              home.username = lib.mkForce "sdelcore";
-              home.homeDirectory = lib.mkForce "/home/sdelcore";
-
-              # Disable catppuccin delta (requires programs.delta which isn't enabled)
-              catppuccin.delta.enable = lib.mkForce false;
+              # Basic shell config
+              programs.bash.enable = true;
+              programs.git.enable = true;
             };
           };
         };
