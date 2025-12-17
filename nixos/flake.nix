@@ -114,6 +114,9 @@
               # Override username (headless.nix uses a parameter)
               home.username = lib.mkForce "sdelcore";
               home.homeDirectory = lib.mkForce "/home/sdelcore";
+
+              # Disable catppuccin delta (requires programs.delta which isn't enabled)
+              catppuccin.delta.enable = lib.mkForce false;
             };
           };
         };
