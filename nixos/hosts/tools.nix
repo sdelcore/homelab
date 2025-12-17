@@ -13,7 +13,7 @@
   # ============================================================
   networking.hostName = "tools";
   networking.useDHCP = false;
-  networking.interfaces.ens18.ipv4.addresses = [{
+  networking.interfaces.eth0.ipv4.addresses = [{
     address = "10.0.0.21";
     prefixLength = 24;
   }];
