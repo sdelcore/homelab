@@ -1,5 +1,0 @@
-# Environment file (contains secrets)
-.env
-
-# Config directories (application state)
-config/

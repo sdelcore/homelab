@@ -2,28 +2,32 @@
 #
 # Services: Traefik, Gluetun (VPN), Deluge, SABnzbd, Prowlarr,
 #           Jackett, FlareSolverr, Sonarr, Radarr, Jellyseerr
-{ config, pkgs, lib, stacksPath, ... }:
+{ config, pkgs, lib, stacksPath, hostsConfig, networkConfig, ... }:
 
+let
+  hostName = "arr";
+  hostConfig = hostsConfig.hosts.${hostName};
+in
 {
   # ============================================================
-  # Network Configuration
+  # Network Configuration (from hosts.json)
   # ============================================================
-  networking.hostName = "arr";
+  networking.hostName = hostName;
   networking.useDHCP = false;
   networking.interfaces.eth0.ipv4.addresses = [{
-    address = "10.0.0.20";
-    prefixLength = 24;
+    address = hostConfig.ip;
+    prefixLength = networkConfig.prefixLength;
   }];
-  networking.defaultGateway = "10.0.0.1";
-  networking.nameservers = [ "1.1.1.1" "8.8.8.8" ];
+  networking.defaultGateway = networkConfig.gateway;
+  networking.nameservers = networkConfig.nameservers;
 
   # ============================================================
   # Docker Stack
   # ============================================================
   dockerStack = {
     enable = true;
-    stackName = "arr";
-    composeFile = stacksPath + "/arr/compose.yml";
+    stackName = hostName;
+    composeFile = stacksPath + "/${hostName}/compose.yml";
     enableTcp = true; # For Homepage discovery from tools VM
     extraPorts = [
       80 8080 # Traefik
@@ -45,22 +49,22 @@
   # ============================================================
   nfsBackup = {
     enable = true;
-    stackName = "arr";
+    stackName = hostName;
   };
 
   # ============================================================
   # Colmena Deployment Settings
   # ============================================================
   deployment = {
-    targetHost = "10.0.0.20";
+    targetHost = hostConfig.ip;
     targetUser = "root";
-    tags = [ "docker" "media" "nixos" ];
+    tags = hostConfig.tags;
 
     # Secret: .env file from 1Password
     # Colmena will run `op read ...` locally and upload the result
     keys."stack-env" = {
-      keyCommand = [ "op" "read" "op://Infrastructure/env-arr-stack/notesPlain" ];
-      destDir = "/opt/stacks/arr";
+      keyCommand = [ "op" "read" "op://Infrastructure/env-${hostName}-stack/notesPlain" ];
+      destDir = "/opt/stacks/${hostName}";
       name = ".env";
       user = "root";
       group = "root";

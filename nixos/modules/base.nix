@@ -21,12 +21,16 @@
     extraGroups = [ "wheel" "docker" ];
     openssh.authorizedKeys.keys = sshKeys;
     shell = pkgs.zsh;
+    hashedPasswordFile = "/run/keys/sdelcore-password";
   };
 
   # Enable zsh system-wide (required for user shell)
   programs.zsh.enable = true;
 
-  users.users.root.openssh.authorizedKeys.keys = sshKeys;
+  users.users.root = {
+    openssh.authorizedKeys.keys = sshKeys;
+    hashedPasswordFile = "/run/keys/root-password";
+  };
 
   security.sudo.wheelNeedsPassword = false;
 
@@ -36,8 +40,8 @@
   services.openssh = {
     enable = true;
     settings = {
-      PermitRootLogin = "prohibit-password";
-      PasswordAuthentication = false;
+      PermitRootLogin = "yes";
+      PasswordAuthentication = true;
     };
   };
 
@@ -56,6 +60,15 @@
 
   # Kernel params for serial console (Proxmox xterm.js)
   boot.kernelParams = [ "console=ttyS0,115200" "console=tty0" ];
+
+  # Include virtio modules in initrd for Proxmox VMs
+  # Required because qemu-guest profile is only in image.nix, not Colmena config
+  boot.initrd.availableKernelModules = [
+    "virtio_pci"
+    "virtio_blk"
+    "virtio_scsi"
+    "virtio_net"
+  ];
 
   # ============================================================
   # Filesystem (required for NixOS)

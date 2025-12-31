@@ -1,0 +1,168 @@
+# Frigate NVR Configuration
+
+# Disable authentication for internal network access
+auth:
+  enabled: false
+  failed_login_rate_limit: 1/second;5/minute;20/hour
+  trusted_proxies:
+    - 10.0.0.0/24
+    - 127.0.0.0/8
+
+mqtt:
+  enabled: true
+  host: 10.0.0.8
+  port: 1883
+  topic_prefix: frigate
+  client_id: frigate
+  user: frigate
+  password: "{FRIGATE_MQTT_PASSWORD}"
+ffmpeg:
+  hwaccel_args: preset-nvidia
+  input_args: preset-rtsp-restream
+# ONNX detector with YOLOv9 model
+# Model must be built first: ./scripts/build-yolov9-model.sh s 320
+detectors:
+  onnx:
+    type: onnx
+
+model:
+  model_type: yolo-generic
+  width: 320
+  height: 320
+  input_tensor: nchw
+  input_pixel_format: rgb
+  input_dtype: float
+  path: /config/yolov9-s-320.onnx
+  labelmap_path: /labelmap/coco-80.txt
+audio:
+  enabled: false
+  max_not_heard: 30
+  min_volume: 500
+  listen:
+    - bark
+    - fire_alarm
+    - scream
+    - speech
+    - yell
+  filters:
+    speech:
+      threshold: 0.8
+record:
+  enabled: true
+  expire_interval: 60
+  sync_recordings: false
+  retain:
+    days: 7
+    mode: motion
+  export:
+    timelapse_args: -vf setpts=0.04*PTS -r 30
+  preview:
+    quality: medium
+  alerts:
+    retain:
+      days: 1
+    pre_capture: 5
+    post_capture: 5
+  detections:
+    retain:
+      days: 1
+    pre_capture: 5
+    post_capture: 5
+snapshots:
+  enabled: true
+  retain:
+    default: 1
+  quality: 70
+motion:
+  enabled: true
+detect:
+  enabled: true
+  # NOTE: Recommended value of 5. Ideally, try and reduce your FPS on the camera.
+  fps: 2
+timestamp_style:
+  # Optional: Position of the timestamp (default: shown below)
+  #           "tl" (top left), "tr" (top right), "bl" (bottom left), "br" (bottom right)
+  position: tl
+  # Optional: Format specifier conform to the Python package "datetime" (default: shown below)
+  #           Additional Examples:
+  #             german: "%d.%m.%Y %H:%M:%S"
+  format: '%m/%d/%Y %H:%M:%S'
+  # Optional: Color of font
+  color:
+    # All Required when color is specified (default: shown below)
+    red: 255
+    green: 255
+    blue: 255
+  # Optional: Line thickness of font (default: shown below)
+  thickness: 2
+go2rtc:
+  streams:
+    theos_room:
+      - ffmpeg:http://10.0.20.20/flv?port=1935&app=bcs&stream=channel0_main.bcs&user=admin&password={FRIGATE_RTSP_PASSWORD}#video=copy#audio=copy#audio=opus
+      - rtsp://admin:{FRIGATE_RTSP_PASSWORD}@10.0.20.20:554/h264Preview_01_main
+    theos_room_sub:
+      - ffmpeg:http://10.0.20.20/flv?port=1935&app=bcs&stream=channel0_ext.bcs&user=admin&password={FRIGATE_RTSP_PASSWORD}#video=copy
+      - rtsp://admin:{FRIGATE_RTSP_PASSWORD}@10.0.20.20:554/h264Preview_01_sub
+    doorbell:
+      - ffmpeg:http://10.0.20.26/flv?port=1935&app=bcs&stream=channel0_main.bcs&user=admin&password={FRIGATE_RTSP_PASSWORD}#video=copy#audio=copy#audio=opus
+      - rtsp://admin:{FRIGATE_RTSP_PASSWORD}@10.0.20.26:554/h264Preview_01_main
+    doorbell_sub:
+      - ffmpeg:http://10.0.20.26/flv?port=1935&app=bcs&stream=channel0_ext.bcs&user=admin&password={FRIGATE_RTSP_PASSWORD}#video=copy
+      - rtsp://admin:{FRIGATE_RTSP_PASSWORD}@10.0.20.26:554/h264Preview_01_sub
+  webrtc:
+    candidates:
+      - 10.0.0.16:8555
+      - stun:8555
+cameras:
+  doorbell:
+    ffmpeg:
+      inputs:
+        - path: rtsp://localhost:8554/doorbell
+          input_args: preset-rtsp-restream
+          roles:
+            - record
+        - path: rtsp://localhost:8554/doorbell_sub
+          input_args: preset-rtsp-restream
+          roles:
+            - detect
+    objects:
+      mask: 
+        0.315,0.953,-0.006,0.97,-0.011,0.041,0.33,0.024,0.334,0.22,0.409,0.345,0.366,0.538,0.319,0.57,0.3,0.908
+    onvif:
+      host: 10.0.20.26
+      port: 8000
+      user: admin
+      password: {FRIGATE_RTSP_PASSWORD}
+      # Keep PTZ enabled - just add these for stability:
+      autotracking:
+        enabled: false  # Only disable autotracking if you don't use it
+  theos_room:
+    ffmpeg:
+      inputs:
+        - path: rtsp://localhost:8554/theos_room
+          input_args: preset-rtsp-restream
+          roles:
+            - record
+        - path: rtsp://localhost:8554/theos_room_sub
+          input_args: preset-rtsp-restream
+          roles:
+            - detect
+    onvif:
+      host: 10.0.20.20
+      port: 8000
+      user: admin
+      password: {FRIGATE_RTSP_PASSWORD}
+      # Keep PTZ enabled - just add these for stability:
+      autotracking:
+        enabled: false  # Only disable if you don't use automatic tracking
+version: 0.16-0
+
+
+
+camera_groups:
+  BE:
+    order: 1
+    icon: LuActivitySquare
+    cameras: birdseye
+    
+

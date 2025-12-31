@@ -73,8 +73,17 @@
   # ============================================================
   # Networking Defaults
   # ============================================================
-  # DHCP by default - Colmena will set static IP per-host
-  networking.useDHCP = lib.mkDefault true;
+  # Disable predictable interface naming (use eth0 instead of ens18)
+  networking.usePredictableInterfaceNames = false;
+
+  # Static IP for initial boot - Colmena will override per-host
+  networking.useDHCP = false;
+  networking.interfaces.eth0.ipv4.addresses = lib.mkDefault [{
+    address = "10.0.0.199";
+    prefixLength = 24;
+  }];
+  networking.defaultGateway = lib.mkDefault "10.0.0.1";
+  networking.nameservers = lib.mkDefault [ "10.0.0.1" ];
 
   # Base firewall - hosts will add their own ports
   networking.firewall = {

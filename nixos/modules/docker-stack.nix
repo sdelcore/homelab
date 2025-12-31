@@ -47,12 +47,14 @@ in
         enable = true;
         dates = "weekly";
       };
-    };
-
-    # Docker TCP socket (optional, for Homepage remote discovery)
-    # When enabled, Docker listens on both unix socket and TCP 2375
-    virtualisation.docker.daemon.settings = mkIf cfg.enableTcp {
-      hosts = [ "unix:///var/run/docker.sock" "tcp://0.0.0.0:2375" ];
+      daemon.settings = mkMerge [
+        # Always configure insecure registry for local registry access
+        { insecure-registries = [ "registry.sdelcore.com" ]; }
+        # Docker TCP socket (optional, for Homepage remote discovery)
+        (mkIf cfg.enableTcp {
+          hosts = [ "unix:///var/run/docker.sock" "tcp://0.0.0.0:2375" ];
+        })
+      ];
     };
 
     # Override default docker service when TCP is enabled

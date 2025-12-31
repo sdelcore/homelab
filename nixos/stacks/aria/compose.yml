@@ -1,0 +1,154 @@
+services:
+  # Traefik - Reverse proxy for subdomain routing
+  traefik:
+    image: traefik:v3.6
+    container_name: traefik
+    command:
+      - --api.dashboard=true
+      - --api.insecure=true
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=aria_aria-network
+      # HTTP entrypoint
+      - --entrypoints.web.address=:80
+      # HTTPS entrypoint for TLS passthrough
+      - --entrypoints.websecure.address=:443
+      - --log.level=INFO
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - aria-network
+    restart: always
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.rule=Host(`traefik.${DOMAIN:-aria.tap}`)"
+      - "traefik.http.routers.dashboard.service=api@internal"
+      - "traefik.http.routers.dashboard.entrypoints=web"
+
+  # Nginx - Serve APK files for ARIA self-update
+  apk-server:
+    image: nginx:alpine
+    container_name: apk-server
+    volumes:
+      - /opt/stacks/aria/public:/usr/share/nginx/html:ro
+    networks:
+      - aria-network
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      # Aria APK updates
+      - "traefik.http.routers.apk.rule=Host(`apk.${DOMAIN:-aria.tap}`)"
+      - "traefik.http.routers.apk.entrypoints=web"
+      - "traefik.http.services.apk.loadbalancer.server.port=80"
+      # DroidCode APK updates (adds /droidcode prefix to requests)
+      - "traefik.http.routers.droidcode.rule=Host(`droidcode.${DOMAIN:-aria.tap}`)"
+      - "traefik.http.routers.droidcode.entrypoints=web"
+      - "traefik.http.routers.droidcode.middlewares=droidcode-prefix"
+      - "traefik.http.middlewares.droidcode-prefix.addprefix.prefix=/droidcode"
+      - "traefik.http.routers.droidcode.service=apk"
+
+  # ============================================================================
+  # Mem - Video Processing and Timeline System
+  # ============================================================================
+
+  # Mem Backend - connects to external STTD at nightman.tap
+  mem-backend:
+    image: registry.sdelcore.com/mem/backend:${TAG:-latest}
+    pull_policy: always
+    container_name: mem-backend
+    restart: unless-stopped
+    environment:
+      - PYTHONUNBUFFERED=1
+      - MEM_CONFIG_PATH=/app/config/config.yaml
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - TZ=${TZ:-America/Toronto}
+      - RTMP_HOST=aria.tap
+    volumes:
+      - /opt/stacks/aria/config/mem:/app/config:ro
+      - /opt/stacks/aria/config/mem/db:/data/db
+      - /opt/stacks/aria/data/mem/uploads:/data/uploads
+    networks:
+      - aria-network
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '2'
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    labels:
+      - "traefik.enable=false"
+
+  # Mem Frontend - serves UI and proxies /api to backend
+  mem-frontend:
+    image: registry.sdelcore.com/mem/frontend:${TAG:-latest}
+    pull_policy: always
+    container_name: mem-frontend
+    restart: unless-stopped
+    environment:
+      - TZ=${TZ:-America/Toronto}
+    networks:
+      - aria-network
+    depends_on:
+      - mem-backend
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    labels:
+      # HTTP routing
+      - "traefik.enable=true"
+      - "traefik.http.routers.mem.rule=Host(`mem.${DOMAIN:-aria.tap}`)"
+      - "traefik.http.routers.mem.entrypoints=web"
+      - "traefik.http.services.mem.loadbalancer.server.port=80"
+      # HTTPS/TLS passthrough routing (for microphone access)
+      - "traefik.tcp.routers.mem-secure.rule=HostSNI(`mem.${DOMAIN:-aria.tap}`)"
+      - "traefik.tcp.routers.mem-secure.entrypoints=websecure"
+      - "traefik.tcp.routers.mem-secure.tls.passthrough=true"
+      - "traefik.tcp.services.mem-secure.loadbalancer.server.port=443"
+
+  # Mem RTMP Server - for OBS streaming
+  mem-rtmp:
+    image: registry.sdelcore.com/mem/rtmp:${TAG:-latest}
+    pull_policy: always
+    container_name: mem-rtmp
+    restart: unless-stopped
+    ports:
+      - "1935:1935"
+    networks:
+      - aria-network
+    depends_on:
+      - mem-backend
+    volumes:
+      - /opt/stacks/aria/data/mem/streams:/data/streams
+    environment:
+      - BACKEND_URL=http://mem-backend:8000
+      - TZ=${TZ:-America/Toronto}
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '2'
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "1935"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+networks:
+  aria-network:
+    driver: bridge

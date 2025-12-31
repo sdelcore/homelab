@@ -33,22 +33,29 @@
   outputs = { self, nixpkgs, nixos-generators, colmena, home-manager, catppuccin, sdelcore-nixos, ... }:
     let
       system = "x86_64-linux";
-      pkgs = import nixpkgs { inherit system; };
+      pkgs = import nixpkgs {
+        inherit system;
+        config.allowUnfree = true;  # For NVIDIA drivers
+      };
+
+      # ============================================================
+      # Load shared configuration from hosts.json
+      # ============================================================
+      # Note: hosts.json is symlinked from repo root to nixos/ for flake access
+      hostsConfig = builtins.fromJSON (builtins.readFile ./hosts.json);
 
       # Shared SSH keys for all hosts
       sshKeys = [
         "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDbCTR4sfbJyTfM/jYhVXZsPMU2QoEib0usUVtmIjU+tjohaZZ8X6maMT32y7V5Ii91TiOxILkh+jd3nbc5svO27li4bjz704Mm6IfNuetv0+YbsfjngLk/VcNBpUbJskEoCh+oiq5JCo9wXmmNZEGaq4LM/FKsnRnTiGlnjeJ9d892sps2eRnjDKLRtO1K+k7C/+UmIOp7qU1CPD7wFys7arIM6m+DdDnNR47syLFJaQA3TxCw01+zG0hNNAMFU1g5Ck41mVQYXAIl5fjGbM+C6jNSl0f64TcZv8+G28uN/uvt/cJYwEH1jC640ieRrStVeYBiUlUuco4Eb1SVIabVNkb2je9wI1qw2VoDjXq+bQFlBHzMj4mPESNVRmrfEg0+KXFvYKvKcOMlYsSfAtLujKa6/4z3Ai3eQQlwo4mZdULe8AY1pbJ4Hb2o/NF8zumsXDci2pYUMzNmWOSonuS+MYIvNEMY5H3sBMC9jkLfvNbm5AA6jadAr/Jkb3Lu168ip8QTQAz/pIecyXQKWXN9bwgMvU3ZxSaHOWL0loeRUiBdAmqJQEQgh7ANZoLIL3uqtaYPPT0pBMMm3V4fEESJ6uWq+lZNFs1DqehMWaBRZ1u86qLZqx8kf46dQB+oW2mWtU2/Re4Ur0cBWR/L2VimwmlB2epsRJT1Lz0kA+jnUw=="
       ];
 
-      # Shared NFS config
-      nfsConfig = {
-        server = "10.0.0.5";
-        export = "/mnt/user/infrastructure";
-        backupSubdir = "docker-data/backups";
-      };
+      # NFS config from hosts.json
+      nfsConfig = hostsConfig.nfs;
 
-      # Path to stacks directory - copy into flake source
-      # This ensures the stacks are available during pure evaluation
+      # Network config from hosts.json
+      networkConfig = hostsConfig.network;
+
+      # Path to stacks directory
       stacksPath = ./stacks;
 
     in
@@ -83,7 +90,7 @@
         meta = {
           nixpkgs = pkgs;
           specialArgs = {
-            inherit sshKeys nfsConfig stacksPath;
+            inherit sshKeys nfsConfig networkConfig stacksPath hostsConfig;
           };
         };
 
@@ -93,8 +100,25 @@
             ./modules/base.nix
             ./modules/docker-stack.nix
             ./modules/nfs-backup.nix
+            ./modules/nvidia.nix
             home-manager.nixosModules.home-manager
           ];
+
+          # Password hashes from 1Password (for console and SSH login)
+          deployment.keys = {
+            "sdelcore-password" = {
+              keyCommand = [ "op" "read" "op://Infrastructure/sdelcore/password" ];
+              user = "root";
+              group = "root";
+              permissions = "0600";
+            };
+            "root-password" = {
+              keyCommand = [ "op" "read" "op://Infrastructure/sdelcore/password" ];
+              user = "root";
+              group = "root";
+              permissions = "0600";
+            };
+          };
 
           # Home-manager configuration for sdelcore user
           home-manager = {
@@ -128,6 +152,8 @@
         # Host-specific configurations
         arr = import ./hosts/arr.nix;
         tools = import ./hosts/tools.nix;
+        nvr = import ./hosts/nvr.nix;
+        aria = import ./hosts/aria.nix;
       };
     };
 }

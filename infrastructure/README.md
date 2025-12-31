@@ -33,9 +33,11 @@ This infrastructure manages:
 ┌─────────────────────────────────────────────────────────────┐
 │                      Proxmox VE                              │
 ├─────────────────────────────────────────────────────────────┤
-│  VM 200: arr      │ Ubuntu + Docker (media stack)           │
-│  VM 201: netbird  │ Ubuntu + Docker (VPN mesh)              │
-│  VM 202: arr-nix  │ NixOS (via nixos-anywhere)              │
+│  VM 200: arr       │ NixOS + Docker (media stack)           │
+│  VM 201: tools     │ NixOS + Docker (utility tools)         │
+│  VM 202: portainer │ Ubuntu + Docker (reference VM)         │
+│  VM 203: nvr       │ NixOS + Docker + GPU (surveillance)    │
+│  VM 204: aria      │ NixOS + Docker (app server)            │
 └─────────────────────────────────────────────────────────────┘
 ```
 

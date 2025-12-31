@@ -1,0 +1,81 @@
+services:
+  # Traefik - Reverse proxy for subdomain routing
+  traefik:
+    image: traefik:v3.6
+    container_name: traefik-nvr
+    command:
+      - --api.dashboard=true
+      - --api.insecure=true
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=nvr_nvr-network
+      - --entrypoints.web.address=:80
+      - --log.level=INFO
+    ports:
+      - "80:80"
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - nvr-network
+    restart: always
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.rule=Host(`traefik.${DOMAIN:-nvr.tap}`)"
+      - "traefik.http.routers.dashboard.service=api@internal"
+      - "traefik.http.routers.dashboard.entrypoints=web"
+
+  # Frigate - NVR with AI object detection using TensorRT
+  frigate:
+    image: ghcr.io/blakeblackshear/frigate:stable-tensorrt
+    container_name: frigate
+    restart: unless-stopped
+    privileged: true
+    shm_size: "512mb"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: cdi
+              device_ids:
+                - nvidia.com/gpu=all
+              capabilities:
+                - gpu
+    environment:
+      - TZ=${TZ:-America/Toronto}
+      - YOLO_MODELS=yolov7-320
+      - FRIGATE_RTSP_PASSWORD=${FRIGATE_RTSP_PASSWORD:-changeme}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ./config:/config
+      - /mnt/media/frigate:/media/frigate
+      - type: tmpfs
+        target: /tmp/cache
+        tmpfs:
+          size: 1000000000
+    ports:
+      - "8971:8971"      # Web UI
+      - "8554:8554"      # RTSP
+      - "8555:8555/tcp"  # WebRTC TCP
+      - "8555:8555/udp"  # WebRTC UDP
+      - "5000:5000"      # API
+    networks:
+      - nvr-network
+    labels:
+      # Traefik routing
+      - "traefik.enable=true"
+      - "traefik.http.routers.frigate.rule=Host(`frigate.${DOMAIN:-nvr.tap}`)"
+      - "traefik.http.routers.frigate.entrypoints=web"
+      - "traefik.http.services.frigate.loadbalancer.server.port=5000"
+      # Homepage auto-discovery labels
+      - "homepage.group=Security"
+      - "homepage.name=Frigate"
+      - "homepage.icon=frigate.png"
+      - "homepage.href=http://frigate.${DOMAIN:-nvr.tap}"
+      - "homepage.description=NVR with AI Detection"
+      - "homepage.widget.type=frigate"
+      - "homepage.widget.url=http://frigate:5000"
+
+networks:
+  nvr-network:
+    driver: bridge

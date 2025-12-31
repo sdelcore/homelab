@@ -1,0 +1,47 @@
+# Mem Configuration for Aria VM
+
+database:
+  path: /data/db/mem.duckdb
+
+sttd:
+  host: "nightman.tap"
+  port: 8765
+  timeout: 300.0
+
+capture:
+  frame:
+    interval_seconds: 5
+    jpeg_quality: 85
+    enable_deduplication: true
+    similarity_threshold: 100.0
+  audio:
+    chunk_duration_seconds: 300
+    sample_rate: 16000
+
+files:
+  filename_format: YYYY-MM-DD_HH-MM-SS
+  filename_regex: ^(\d{4})-(\d{2})-(\d{2})_(\d{2})-(\d{2})-(\d{2})$
+
+api:
+  host: 0.0.0.0
+  port: 8000
+  max_upload_size: 5368709120
+  default_time_range_days: 1
+
+streaming:
+  rtmp:
+    enabled: true
+    port: 1935
+    max_concurrent_streams: 10
+  capture:
+    frame_interval_seconds: 1
+    buffer_size: 30
+    max_frame_width: 7680
+    max_frame_height: 4320
+  auth:
+    require_stream_key: true
+
+logging:
+  level: INFO
+  debug_level: DEBUG
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"

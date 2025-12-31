@@ -2,45 +2,21 @@
 # VM Outputs
 # =============================================================================
 
-output "ubuntu_vms" {
-  description = "Map of Ubuntu VM information"
-  value = {
-    for name, vm in proxmox_virtual_environment_vm.ubuntu_vm : name => {
-      vm_id = vm.vm_id
-      name  = vm.name
-      ip    = try(vm.ipv4_addresses[1][0], split("/", local.ubuntu_vms[name].ip)[0])
-    }
-  }
-}
-
 output "nixos_vms" {
   description = "Map of NixOS VM information"
-  value = {
-    for name, vm in proxmox_virtual_environment_vm.nixos_vm : name => {
-      vm_id = vm.vm_id
-      name  = vm.name
-      ip    = try(vm.ipv4_addresses[1][0], split("/", local.nixos_vms[name].ip)[0])
-    }
-  }
-}
-
-output "all_vms" {
-  description = "Combined map of all VMs"
   value = merge(
-    {
-      for name, vm in proxmox_virtual_environment_vm.ubuntu_vm : name => {
-        vm_id = vm.vm_id
-        name  = vm.name
-        os    = "ubuntu"
-        ip    = try(vm.ipv4_addresses[1][0], split("/", local.ubuntu_vms[name].ip)[0])
-      }
-    },
     {
       for name, vm in proxmox_virtual_environment_vm.nixos_vm : name => {
         vm_id = vm.vm_id
         name  = vm.name
-        os    = "nixos"
-        ip    = try(vm.ipv4_addresses[1][0], split("/", local.nixos_vms[name].ip)[0])
+        ip    = local.hosts_config.hosts[name].ip
+      }
+    },
+    {
+      for name, vm in proxmox_virtual_environment_vm.nixos_gpu_vm : name => {
+        vm_id = vm.vm_id
+        name  = vm.name
+        ip    = local.hosts_config.hosts[name].ip
       }
     }
   )
@@ -53,9 +29,9 @@ output "all_vms" {
 output "colmena_hosts" {
   description = "NixOS hosts for Colmena deployment"
   value = {
-    for name, vm in proxmox_virtual_environment_vm.nixos_vm : name => {
-      ip   = split("/", local.nixos_vms[name].ip)[0]
-      tags = ["nixos", "docker"]
+    for name, host in local.hosts_config.hosts : name => {
+      ip   = host.ip
+      tags = host.tags
     }
   }
 }
@@ -94,22 +70,12 @@ local-zone: "strongsad.tap." static
 local-data: "strongsad.tap. 3600 IN A 10.0.0.12"
 
 # =============================================================================
-# NixOS VMs (Colmena-managed, Traefik reverse proxies)
+# NixOS VMs (from hosts.json)
 # =============================================================================
-%{for name, config in local.nixos_vms~}
-%{if try(config.domain, "") != ""~}
-local-zone: "${config.domain}." redirect
-local-data: "${config.domain}. 3600 IN A ${split("/", config.ip)[0]}"
-
-%{endif~}
-%{endfor~}
-# =============================================================================
-# Ubuntu VMs (cloud-init provisioned)
-# =============================================================================
-%{for name, config in local.ubuntu_vms~}
-%{if try(config.domain, "") != ""~}
-local-zone: "${config.domain}." redirect
-local-data: "${config.domain}. 3600 IN A ${split("/", config.ip)[0]}"
+%{for name, host in local.hosts_config.hosts~}
+%{if try(host.domain, "") != ""~}
+local-zone: "${host.domain}." redirect
+local-data: "${host.domain}. 3600 IN A ${host.ip}"
 
 %{endif~}
 %{endfor~}

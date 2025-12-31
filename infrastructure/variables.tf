@@ -62,7 +62,7 @@ variable "vm_bridge" {
 # User Configuration
 # =============================================================================
 variable "vm_user" {
-  description = "Default user for Ubuntu VMs"
+  description = "Default user for VMs (used by cloud-init templates)"
   type        = string
   default     = "sdelcore"
 }
@@ -89,6 +89,12 @@ variable "nixos_template_vmid" {
   description = "VM ID of the NixOS template (created by upload-nixos-image.sh)"
   type        = number
   default     = 9000
+}
+
+variable "nixos_template_storage" {
+  description = "Proxmox storage for NixOS template (shared storage for multi-node access)"
+  type        = string
+  default     = "nfs-infrastructure"
 }
 
 # =============================================================================

@@ -1,17 +1,13 @@
-# tools VM - Utility tools stack
+# aria VM - ARIA APK update server + Mem video processing
 #
-# Services: Traefik, Termix (SSH web UI), Homepage, Stirling PDF
+# Services: Traefik, Nginx (APK server), Mem (backend, frontend, RTMP)
 { config, pkgs, lib, stacksPath, hostsConfig, networkConfig, ... }:
 
 let
-  hostName = "tools";
+  hostName = "aria";
   hostConfig = hostsConfig.hosts.${hostName};
 in
 {
-  imports = [
-    ../modules/homepage.nix
-  ];
-
   # ============================================================
   # Network Configuration (from hosts.json)
   # ============================================================
@@ -34,16 +30,25 @@ in
     enableTcp = false;
     extraPorts = [
       80 8080 # Traefik
+      1935    # RTMP streaming
     ];
   };
 
   # ============================================================
-  # Homepage Configuration (declarative)
+  # Ensure directories exist
   # ============================================================
-  homepage.enable = true;
+  systemd.tmpfiles.rules = [
+    "d /opt/stacks/${hostName}/public 0755 root root -"
+    # Mem directories
+    "d /opt/stacks/${hostName}/config/mem 0755 root root -"
+    "d /opt/stacks/${hostName}/data/mem 0755 root root -"
+    "d /opt/stacks/${hostName}/data/mem/db 0755 root root -"
+    "d /opt/stacks/${hostName}/data/mem/uploads 0755 root root -"
+    "d /opt/stacks/${hostName}/data/mem/streams 0755 root root -"
+  ];
 
   # ============================================================
-  # NFS Backup
+  # NFS Backup (enabled for mem data)
   # ============================================================
   nfsBackup = {
     enable = true;
