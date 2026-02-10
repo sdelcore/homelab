@@ -3,53 +3,27 @@
 # Services: Frigate (object detection, RTSP restreaming)
 # GPU: NVIDIA T400 via PCI passthrough
 # Detector: ONNX with YOLOv9-s-320 model (built on first boot)
-{ config, pkgs, lib, stacksPath, hostsConfig, networkConfig, ... }:
+{ name, config, pkgs, lib, ... }:
 
 let
-  hostName = "nvr";
-  hostConfig = hostsConfig.hosts.${hostName};
-
   # YOLOv9 model configuration
   modelSize = "s";      # t, s, m, c, or e
   imgSize = "320";      # 320, 416, or 640
   modelFile = "yolov9-${modelSize}-${imgSize}.onnx";
-  configDir = "/opt/stacks/${hostName}/config";
+  configDir = "/opt/stacks/${name}/config";
 in
 {
   # ============================================================
-  # Network Configuration (from hosts.json)
+  # Docker Stack Overrides
   # ============================================================
-  networking.hostName = hostName;
-  networking.useDHCP = false;
-  networking.interfaces.eth0.ipv4.addresses = [{
-    address = hostConfig.ip;
-    prefixLength = networkConfig.prefixLength;
-  }];
-  networking.defaultGateway = networkConfig.gateway;
-  networking.nameservers = networkConfig.nameservers;
-
-  # ============================================================
-  # NVIDIA GPU Support
-  # ============================================================
-  nvidia.enable = true;
-
-  # ============================================================
-  # Docker Stack
-  # ============================================================
-  dockerStack = {
-    enable = true;
-    stackName = hostName;
-    composeFile = stacksPath + "/${hostName}/compose.yml";
-    enableTcp = false;
-    extraPorts = [
-      80          # Traefik HTTP
-      8080        # Traefik Dashboard
-      8971        # Frigate Web UI
-      8554        # RTSP
-      8555        # WebRTC (TCP + UDP opened below)
-      5000        # Frigate API
-    ];
-  };
+  dockerStack.extraPorts = [
+    80          # Traefik HTTP
+    8080        # Traefik Dashboard
+    8971        # Frigate Web UI
+    8554        # RTSP
+    8555        # WebRTC (TCP + UDP opened below)
+    5000        # Frigate API
+  ];
 
   # Open WebRTC UDP port
   networking.firewall.allowedUDPPorts = [ 8555 ];
@@ -62,7 +36,7 @@ in
   systemd.services.frigate-model-init = {
     description = "Build YOLOv9 ONNX model for Frigate";
     wantedBy = [ "multi-user.target" ];
-    before = [ "${hostName}-stack.service" ];
+    before = [ "${name}-stack.service" ];
     after = [ "docker.service" ];
     requires = [ "docker.service" ];
 
@@ -116,33 +90,6 @@ in
           exit 1
         fi
       '';
-    };
-  };
-
-  # ============================================================
-  # NFS Backup
-  # ============================================================
-  nfsBackup = {
-    enable = true;
-    stackName = hostName;
-  };
-
-  # ============================================================
-  # Colmena Deployment Settings
-  # ============================================================
-  deployment = {
-    targetHost = hostConfig.ip;
-    targetUser = "root";
-    tags = hostConfig.tags;
-
-    # Secret: .env file from 1Password
-    keys."stack-env" = {
-      keyCommand = [ "op" "read" "op://Infrastructure/env-${hostName}-stack/notesPlain" ];
-      destDir = "/opt/stacks/${hostName}";
-      name = ".env";
-      user = "root";
-      group = "root";
-      permissions = "0600";
     };
   };
 }

@@ -2,7 +2,7 @@
   "network": {
     "gateway": "10.0.0.1",
     "prefixLength": 24,
-    "nameservers": ["1.1.1.1", "8.8.8.8"]
+    "nameservers": ["10.0.0.1", "1.1.1.1", "8.8.8.8"]
   },
   "nfs": {
     "server": "10.0.0.5",
@@ -58,6 +58,19 @@
       "tags": ["docker", "nvr", "nvidia", "nixos"],
       "gpu": true,
       "gpuId": "0000:04:00.0"
+    },
+    "media": {
+      "ip": "10.0.0.15",
+      "mac": "BC:24:11:00:00:18",
+      "node": "strongbad",
+      "vmId": 205,
+      "cores": 4,
+      "memory": 8192,
+      "disk": 50,
+      "domain": "media.tap",
+      "tags": ["docker", "media", "nvidia", "nixos"],
+      "gpu": true,
+      "gpuId": "0000:01:00.0"
     }
   }
 }

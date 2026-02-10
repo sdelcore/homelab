@@ -3,8 +3,9 @@
 # =============================================================================
 # Architecture:
 #   - All VM config is defined in ../hosts.json (single source of truth)
-#   - NixOS VMs: Cloned from template, configured by Colmena
-#   - Ubuntu templates kept in templates/ for reference only
+#   - VMs cloned from Debian cloud image template (cloud-init for SSH+IP)
+#   - nixos-anywhere installs NixOS over SSH
+#   - Colmena manages ongoing NixOS configuration
 # =============================================================================
 
 locals {
@@ -22,9 +23,8 @@ locals {
   nfs_docker_data = "docker-data"
 
   # ---------------------------------------------------------------------------
-  # NixOS VMs (cloned from template, configured by Colmena)
+  # Non-GPU VMs
   # ---------------------------------------------------------------------------
-  # Filter hosts without GPU
   nixos_vms = {
     for name, host in local.hosts_config.hosts : name => {
       node        = host.node
@@ -39,9 +39,8 @@ locals {
   }
 
   # ---------------------------------------------------------------------------
-  # NixOS GPU VMs (with PCI passthrough)
+  # GPU VMs (with PCI passthrough)
   # ---------------------------------------------------------------------------
-  # Filter hosts with GPU
   nixos_gpu_vms = {
     for name, host in local.hosts_config.hosts : name => {
       node        = host.node
@@ -55,29 +54,19 @@ locals {
       gpu_id      = host.gpuId
     } if host.gpu
   }
-
-  # ---------------------------------------------------------------------------
-  # NixOS template VMIDs per node
-  # ---------------------------------------------------------------------------
-  # strongmad: 9000 (NFS shared storage)
-  # strongbad: 9002 (local-lvm storage - more reliable for GPU VMs)
-  nixos_template_vmids = {
-    strongmad = 9000
-    strongbad = 9002
-  }
 }
 
 # =============================================================================
-# NIXOS VMs (cloned from template, configured by Colmena)
+# VMs (cloned from Debian cloud image, then nixos-anywhere installs NixOS)
 # =============================================================================
 # Workflow:
-# 1. Build NixOS image: nix build ./nixos#proxmox-image
-# 2. Upload to Proxmox: ./scripts/upload-nixos-image.sh
-# 3. OpenTofu clones VMs from template
+# 1. One-time: ./scripts/setup-cloud-template.sh (create Debian template)
+# 2. OpenTofu clones VMs from Debian template (cloud-init sets SSH keys + IP)
+# 3. nixos-anywhere installs NixOS: ./scripts/deploy.sh --nixos-anywhere
 # 4. Colmena deploys configuration: colmena apply
 # =============================================================================
 
-# Clone NixOS VMs from template
+# Clone VMs from Debian cloud image template
 resource "proxmox_virtual_environment_vm" "nixos_vm" {
   for_each = local.nixos_vms
 
@@ -90,9 +79,9 @@ resource "proxmox_virtual_environment_vm" "nixos_vm" {
   on_boot         = true
   stop_on_destroy = true
 
-  # Clone from NixOS template
+  # Clone from Debian cloud image template
   clone {
-    vm_id = var.nixos_template_vmid
+    vm_id = var.cloud_template_vmid
   }
 
   agent {
@@ -138,10 +127,13 @@ resource "proxmox_virtual_environment_vm" "nixos_vm" {
     mac_address = each.value.mac_address
   }
 
-  # Cloud-init for initial network config (DHCP)
-  # Static IP is set by Colmena after first boot
+  # Cloud-init for initial network and SSH key config
   initialization {
     datastore_id = var.vm_storage
+
+    user_account {
+      keys = var.ssh_public_keys
+    }
 
     ip_config {
       ipv4 {
@@ -153,7 +145,7 @@ resource "proxmox_virtual_environment_vm" "nixos_vm" {
 
   lifecycle {
     ignore_changes = [
-      # Ignore changes managed by Colmena
+      # Ignore changes managed by Colmena/nixos-anywhere
       initialization,
       clone,
     ]
@@ -161,7 +153,7 @@ resource "proxmox_virtual_environment_vm" "nixos_vm" {
 }
 
 # =============================================================================
-# NIXOS GPU VMs (with PCI passthrough)
+# GPU VMs (with PCI passthrough)
 # =============================================================================
 # These VMs use q35 machine type for PCIe passthrough and have GPU attached.
 # Prerequisite: Create PCI resource mapping in Proxmox UI before applying.
@@ -182,9 +174,9 @@ resource "proxmox_virtual_environment_vm" "nixos_gpu_vm" {
   # q35 machine type required for PCIe passthrough
   machine = "q35"
 
-  # Clone from NixOS template (node-specific, but all share same NFS disk)
+  # Clone from Debian cloud image template
   clone {
-    vm_id = local.nixos_template_vmids[each.value.node]
+    vm_id = var.cloud_template_vmid
   }
 
   agent {
@@ -198,9 +190,10 @@ resource "proxmox_virtual_environment_vm" "nixos_gpu_vm" {
 
   serial_device {}
 
-  # Disable VGA since GPU is passed through
+  # Minimal VGA for Proxmox console access (GPU passthrough still works for compute)
   vga {
-    type = "none"
+    type   = "std"
+    memory = 16
   }
 
   cpu {
@@ -241,9 +234,13 @@ resource "proxmox_virtual_environment_vm" "nixos_gpu_vm" {
     xvga   = false
   }
 
-  # Cloud-init for initial network config
+  # Cloud-init for initial network and SSH key config
   initialization {
     datastore_id = var.vm_storage
+
+    user_account {
+      keys = var.ssh_public_keys
+    }
 
     ip_config {
       ipv4 {
@@ -255,7 +252,7 @@ resource "proxmox_virtual_environment_vm" "nixos_gpu_vm" {
 
   lifecycle {
     ignore_changes = [
-      # Ignore changes managed by Colmena
+      # Ignore changes managed by Colmena/nixos-anywhere
       initialization,
       clone,
     ]

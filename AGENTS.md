@@ -5,7 +5,8 @@ Instructions for AI coding agents working in this repository.
 ## Project Overview
 
 Infrastructure-as-code for deploying NixOS Docker hosts on Proxmox using:
-- **OpenTofu**: VM provisioning (clones NixOS templates)
+- **OpenTofu**: VM provisioning (clones Debian cloud image templates)
+- **nixos-anywhere**: Installs NixOS over SSH onto Debian VMs (uses disko for partitioning)
 - **NixOS + Colmena**: Configuration management for all VMs
 - **1Password**: Secrets management via `op` CLI
 
@@ -16,10 +17,14 @@ Infrastructure-as-code for deploying NixOS Docker hosts on Proxmox using:
 direnv allow
 
 # Full deployment
-./scripts/deploy.sh                    # Image + tofu + colmena
-./scripts/deploy.sh --colmena-only     # NixOS configs only
-./scripts/deploy.sh --tofu-only        # VM provisioning only
-./scripts/deploy.sh --image-only       # NixOS image build/upload only
+./scripts/deploy.sh                                  # tofu + colmena (daily use)
+./scripts/deploy.sh --nixos-anywhere                 # tofu + nixos-anywhere ALL + colmena
+./scripts/deploy.sh --nixos-anywhere-on tools        # tofu + nixos-anywhere single host + colmena
+./scripts/deploy.sh --colmena-only                   # NixOS configs only
+./scripts/deploy.sh --tofu-only                      # VM provisioning only
+
+# One-time setup: create Debian cloud image template on Proxmox
+./scripts/setup-cloud-template.sh
 
 # OpenTofu (VM provisioning) - run from infrastructure/
 tofu init                              # Initialize providers
@@ -35,9 +40,11 @@ colmena apply --on arr                 # Deploy to specific host
 colmena apply --on @media              # Deploy by tag
 colmena upload-keys                    # Update secrets only
 
-# NixOS image
-cd nixos && nix build .#proxmox-image  # Build Proxmox image
-./scripts/upload-nixos-image.sh        # Upload to Proxmox as template
+# nixos-anywhere (install NixOS on a Debian VM)
+nixos-anywhere --flake ./nixos#tools root@10.0.0.21
+
+# Build NixOS config for a host (verify it compiles)
+nix build ./nixos#nixosConfigurations.tools.config.system.build.toplevel
 ```
 
 ## Testing & Validation
@@ -100,6 +107,7 @@ nix flake check                        # Check flake validity
 - Environment defaults: `${VAR:-default}`
 - NFS volumes for shared data, local `./config/` for per-service state
 - Networks: Use named bridge networks per stack
+- Use `pull_policy: always` for services using `:latest` tag to auto-pull updates on restart
 
 ## File Organization
 
@@ -110,9 +118,10 @@ nix flake check                        # Check flake validity
 | `infrastructure/templates/` | Cloud-init templates (reference only, not deployed) |
 | `nixos/` | NixOS + Colmena configuration |
 | `nixos/hosts/` | Per-host NixOS configurations |
-| `nixos/modules/` | Reusable NixOS modules |
+| `nixos/modules/` | Reusable NixOS modules (base, disko, docker-stack, etc.) |
 | `nixos/stacks/` | Docker Compose stacks (deployed via Colmena) |
 | `scripts/` | Deployment automation scripts |
+| `docs/` | Additional documentation (cloud-init troubleshooting, etc.) |
 
 ## Naming Conventions
 
@@ -143,13 +152,15 @@ nix flake check                        # Check flake validity
 
 2. Create host config at `nixos/hosts/newvm.nix`
 
-3. Register in `nixos/flake.nix` colmenaHive
+3. Create stack at `nixos/stacks/newvm/compose.yml`
 
-4. Create stack at `nixos/stacks/newvm/compose.yml`
+4. Create 1Password secret: `op item create --category="Secure Note" --title="env-newvm-stack" --vault="Infrastructure" 'notesPlain=KEY=value'`
 
-5. Create 1Password secret: `op item create --category="Secure Note" --title="env-newvm-stack" --vault="Infrastructure" 'notesPlain=KEY=value'`
-
-6. Deploy: `tofu apply && colmena apply --on newvm`
+5. Deploy:
+   ```bash
+   tofu apply                                          # Provision VM (Debian)
+   ./scripts/deploy.sh --nixos-anywhere-on newvm       # Install NixOS + configure
+   ```
 
 ## Secrets Management
 
@@ -160,6 +171,9 @@ nix flake check                        # Check flake validity
 ## Key Architecture Patterns
 
 - **Single source of truth**: All VM config (IP, MAC, resources) defined in `nixos/hosts.json`
+- **Debian template + nixos-anywhere**: VMs boot Debian via cloud-init, then nixos-anywhere installs NixOS over SSH
+- **Disko**: Declarative disk partitioning (GPT + BIOS boot + ext4 root) shared across all VMs
+- **Shared NixOS modules**: `sharedModules` and `mkHostConfig` in flake.nix are used by both `nixosConfigurations` (nixos-anywhere) and `colmenaHive`
 - **Traefik per VM**: Each stack runs its own Traefik for subdomain routing
 - **NFS backup**: Configs at `/opt/stacks/<stack>/config/` synced hourly to NFS
 - **Docker TCP**: Enable on VMs needing remote discovery (Homepage)
@@ -167,7 +181,19 @@ nix flake check                        # Check flake validity
 
 ## Common Gotchas
 
-- Cloud-init only runs on first boot; recreate VM for config changes
+- Cloud-init only runs on first boot; recreate VM for cloud-init config changes
+- nixos-anywhere wipes disks — use with caution on existing VMs
+- After nixos-anywhere, host SSH keys change — `ssh-keygen -R <ip>` (deploy.sh does this automatically)
 - NVIDIA GPU passthrough requires `rombar = false`
 - After IP reuse, clear SSH known_hosts: `ssh-keygen -R <ip>`
 - New files in nixos/ must be `git add`ed before `colmena build` (Nix flakes only see tracked files)
+- `networking.usePredictableInterfaceNames = false` is in `base.nix` — required for `eth0` references
+
+## Stack-Specific Configuration
+
+### Mem Stack (aria)
+The mem video processing stack requires special configuration for RTMP streaming:
+- Set `RTMP_HOST` environment variable to the external hostname (e.g., `aria.tap`)
+- Configure `streaming.rtmp.host` in `config/mem/config.yaml`
+- This ensures OBS receives correct RTMP URLs for connecting from outside Docker network
+- Uses `pull_policy: always` to auto-update images when containers restart

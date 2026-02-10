@@ -113,8 +113,12 @@ in
         "${cfg.stackName}-link-compose.service"
         "stack-restore.service" # Wait for NFS restore if enabled
       ];
+      requires = [ "docker.service" ];
       wants = [ "network-online.target" ];
       wantedBy = [ "multi-user.target" ];
+
+      # Restart stack when Docker restarts
+      partOf = [ "docker.service" ];
 
       path = [ pkgs.docker pkgs.docker-compose ];
 

@@ -27,8 +27,9 @@ in
     environment.etc."stacks/backup-to-nfs.sh" = {
       mode = "0755";
       text = ''
-        #!/bin/bash
+        #!${pkgs.bash}/bin/bash
         set -euo pipefail
+        export PATH="${pkgs.coreutils}/bin:${pkgs.util-linux}/bin:${pkgs.nfs-utils}/bin:${pkgs.rsync}/bin:$PATH"
 
         STACK="${cfg.stackName}"
         NFS_SERVER="${nfsConfig.server}"
@@ -54,7 +55,7 @@ in
 
         # Sync config directory
         if [ -d "$LOCAL_PATH/config" ]; then
-          ${pkgs.rsync}/bin/rsync -a --delete --no-owner --no-group \
+          rsync -a --delete --no-owner --no-group \
             "$LOCAL_PATH/config/" \
             "$MOUNT_POINT/$BACKUP_SUBDIR/config/"
           echo "[$(date)] Backup completed successfully"
@@ -70,8 +71,9 @@ in
     environment.etc."stacks/restore-nfs-backup.sh" = {
       mode = "0755";
       text = ''
-        #!/bin/bash
+        #!${pkgs.bash}/bin/bash
         set -euo pipefail
+        export PATH="${pkgs.coreutils}/bin:${pkgs.util-linux}/bin:${pkgs.nfs-utils}/bin:$PATH"
 
         STACK="${cfg.stackName}"
         NFS_SERVER="${nfsConfig.server}"
@@ -96,7 +98,7 @@ in
         if [ -d "$MOUNT_POINT/$BACKUP_SUBDIR/config" ]; then
           if [ ! -d "$LOCAL_PATH/config" ] || [ -z "$(ls -A "$LOCAL_PATH/config" 2>/dev/null)" ]; then
             mkdir -p "$LOCAL_PATH"
-            cp -a "$MOUNT_POINT/$BACKUP_SUBDIR/config" "$LOCAL_PATH/"
+            cp -r "$MOUNT_POINT/$BACKUP_SUBDIR/config" "$LOCAL_PATH/"
             echo "[$(date)] Restored config from NFS backup"
           else
             echo "[$(date)] Local config already exists, skipping restore"

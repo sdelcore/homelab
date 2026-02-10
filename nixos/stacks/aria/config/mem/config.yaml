@@ -31,6 +31,7 @@ api:
 streaming:
   rtmp:
     enabled: true
+    host: "aria.tap"  # External hostname for RTMP URLs (OBS connects to this)
     port: 1935
     max_concurrent_streams: 10
   capture:

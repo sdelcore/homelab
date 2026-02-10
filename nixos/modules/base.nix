@@ -53,16 +53,14 @@
   # ============================================================
   # Boot Configuration
   # ============================================================
-  boot.loader.grub = {
-    enable = true;
-    device = "/dev/vda";
-  };
+  # GRUB is enabled here; device is set by disko's EF02 partition
+  boot.loader.grub.enable = true;
 
   # Kernel params for serial console (Proxmox xterm.js)
   boot.kernelParams = [ "console=ttyS0,115200" "console=tty0" ];
 
   # Include virtio modules in initrd for Proxmox VMs
-  # Required because qemu-guest profile is only in image.nix, not Colmena config
+  # Required for virtio disk/network access in Proxmox
   boot.initrd.availableKernelModules = [
     "virtio_pci"
     "virtio_blk"
@@ -71,13 +69,10 @@
   ];
 
   # ============================================================
-  # Filesystem (required for NixOS)
+  # Networking
   # ============================================================
-  # Root filesystem on virtio disk (matches nixos-generators proxmox format)
-  fileSystems."/" = {
-    device = "/dev/vda1";
-    fsType = "ext4";
-  };
+  # Disable predictable interface naming (use eth0 instead of ens18)
+  networking.usePredictableInterfaceNames = false;
 
   # ============================================================
   # Common Packages

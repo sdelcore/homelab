@@ -1,71 +1,21 @@
 # tools VM - Utility tools stack
 #
 # Services: Traefik, Termix (SSH web UI), Homepage, Stirling PDF
-{ config, pkgs, lib, stacksPath, hostsConfig, networkConfig, ... }:
-
-let
-  hostName = "tools";
-  hostConfig = hostsConfig.hosts.${hostName};
-in
+{ ... }:
 {
   imports = [
     ../modules/homepage.nix
   ];
 
   # ============================================================
-  # Network Configuration (from hosts.json)
+  # Docker Stack Overrides
   # ============================================================
-  networking.hostName = hostName;
-  networking.useDHCP = false;
-  networking.interfaces.eth0.ipv4.addresses = [{
-    address = hostConfig.ip;
-    prefixLength = networkConfig.prefixLength;
-  }];
-  networking.defaultGateway = networkConfig.gateway;
-  networking.nameservers = networkConfig.nameservers;
-
-  # ============================================================
-  # Docker Stack
-  # ============================================================
-  dockerStack = {
-    enable = true;
-    stackName = hostName;
-    composeFile = stacksPath + "/${hostName}/compose.yml";
-    enableTcp = false;
-    extraPorts = [
-      80 8080 # Traefik
-    ];
-  };
+  dockerStack.extraPorts = [
+    80 8080 # Traefik
+  ];
 
   # ============================================================
   # Homepage Configuration (declarative)
   # ============================================================
   homepage.enable = true;
-
-  # ============================================================
-  # NFS Backup
-  # ============================================================
-  nfsBackup = {
-    enable = true;
-    stackName = hostName;
-  };
-
-  # ============================================================
-  # Colmena Deployment Settings
-  # ============================================================
-  deployment = {
-    targetHost = hostConfig.ip;
-    targetUser = "root";
-    tags = hostConfig.tags;
-
-    # Secret: .env file from 1Password
-    keys."stack-env" = {
-      keyCommand = [ "op" "read" "op://Infrastructure/env-${hostName}-stack/notesPlain" ];
-      destDir = "/opt/stacks/${hostName}";
-      name = ".env";
-      user = "root";
-      group = "root";
-      permissions = "0600";
-    };
-  };
 }
