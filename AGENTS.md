@@ -226,6 +226,15 @@ nixos/flake.nix (hosts defined as Nix attrset)
 - **Unified VM resource**: All VMs (GPU and non-GPU) use a single `proxmox_virtual_environment_vm.nixos_vm` resource with conditionals for `machine`, `vga.memory`, `tags`, and `dynamic "hostpci"`
 - **GPU VMs**: Require `gpu = true` and `gpuId` in hosts attrset; the unified resource automatically sets q35 machine type, minimal VGA memory, and PCI passthrough
 
+## Manual Prerequisites
+
+These one-time steps must be done outside of OpenTofu:
+
+- **pfSense DNS**: Add `include-toplevel: /var/unbound/conf.d/*` to DNS Resolver Custom Options (Services → DNS Resolver → General Settings). Without this, the OpenTofu-managed config file is ignored.
+- **pfSense DHCP**: Managed automatically by OpenTofu — no manual config needed.
+- **Proxmox GPU mapping**: For GPU VMs, create a PCI resource mapping in Proxmox UI (Datacenter → Resource Mappings → PCI Devices) and use the PCI ID as `gpuId` in the host definition.
+- **1Password**: Place service account token at `~/.config/op/service-account-token` (loaded by `.envrc`).
+
 ## Common Gotchas
 
 - Cloud-init only runs on first boot; recreate VM (`tofu apply -replace=...`) for cloud-init config changes

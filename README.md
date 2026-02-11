@@ -23,6 +23,34 @@ All VM definitions live in a single Nix attrset in `nixos/flake.nix`. Running `j
 | aria | 204 | 10.0.0.23 | strongmad | App server |
 | media | 205 | 10.0.0.15 | strongbad | Media services (GPU) |
 
+## Prerequisites
+
+These one-time manual steps are required before OpenTofu can manage the full stack:
+
+### pfSense DNS Resolver
+
+The DNS config file is pushed to pfSense automatically, but Unbound must be configured to include it:
+
+1. Navigate to **Services → DNS Resolver → General Settings**
+2. Add to **Custom Options**: `include-toplevel: /var/unbound/conf.d/*`
+3. Save and apply
+
+### pfSense DHCP
+
+DHCP static mappings are managed by OpenTofu automatically. No manual pfSense configuration is needed — `just tofu` creates and applies all MAC → IP mappings.
+
+### Proxmox GPU Passthrough
+
+For GPU VMs (`gpu = true`), create a PCI resource mapping in Proxmox before applying:
+
+1. Navigate to **Datacenter → Resource Mappings → PCI Devices**
+2. Add the GPU device (note the PCI ID, e.g., `0000:01:00`)
+3. Use that PCI ID as `gpuId` in the host definition
+
+### 1Password
+
+A service account token must exist at `~/.config/op/service-account-token`. This is loaded automatically by `.envrc`.
+
 ## Quick Start
 
 ```bash
