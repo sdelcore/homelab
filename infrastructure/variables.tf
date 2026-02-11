@@ -31,3 +31,17 @@ variable "ssh_public_keys" {
   type        = list(string)
   default     = []
 }
+
+# =============================================================================
+# pfSense Connection
+# =============================================================================
+variable "pfsense" {
+  description = "pfSense connection configuration"
+  type = object({
+    url             = string
+    username        = string
+    password        = string
+    tls_skip_verify = optional(bool, true)
+  })
+  sensitive = true
+}

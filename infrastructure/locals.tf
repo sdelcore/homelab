@@ -60,3 +60,38 @@ locals {
     } if host.gpu
   }
 }
+
+# =============================================================================
+# Infrastructure Devices (not managed by OpenTofu)
+# =============================================================================
+# Shared definition used by both DNS and DHCP configurations.
+# Devices with mac = null are included in DNS but excluded from DHCP.
+
+locals {
+  infra_devices = {
+    pfsense = {
+      ip  = "10.0.0.1"
+      mac = null # DHCP server itself — no static mapping
+    }
+    pihole = {
+      ip  = "10.0.0.18"
+      mac = "XX:XX:XX:XX:XX:XX" # TODO: fill in actual MAC
+    }
+    tower = {
+      ip  = "10.0.0.5"
+      mac = "XX:XX:XX:XX:XX:XX" # TODO: fill in actual MAC
+    }
+    strongbad = {
+      ip  = "10.0.0.10"
+      mac = "XX:XX:XX:XX:XX:XX" # TODO: fill in actual MAC
+    }
+    strongmad = {
+      ip  = "10.0.0.11"
+      mac = "XX:XX:XX:XX:XX:XX" # TODO: fill in actual MAC
+    }
+    strongsad = {
+      ip  = "10.0.0.12"
+      mac = "XX:XX:XX:XX:XX:XX" # TODO: fill in actual MAC
+    }
+  }
+}

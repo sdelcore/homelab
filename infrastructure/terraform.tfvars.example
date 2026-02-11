@@ -6,6 +6,14 @@
 #   tls_insecure     = true
 # }
 
+# pfSense connection (generate with `just init-secrets`)
+# pfsense = {
+#   url             = "https://10.0.0.1"
+#   username        = "admin"
+#   password        = "your-password"
+#   tls_skip_verify = true
+# }
+
 vm = {
   storage = "local-lvm"
   bridge  = "vmbr0"

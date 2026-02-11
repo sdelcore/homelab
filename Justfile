@@ -64,7 +64,7 @@ validate:
 # ============================================================
 
 # Generate secrets.auto.tfvars from 1Password
-init-secrets:
+secrets:
     #!/usr/bin/env bash
     set -euo pipefail
     echo "Generating secrets from 1Password..."
@@ -74,6 +74,13 @@ init-secrets:
       api_token_id     = "$(op read 'op://Infrastructure/Proxmox/token_id')"
       api_token_secret = "$(op read 'op://Infrastructure/Proxmox/credential')"
       tls_insecure     = true
+    }
+
+    pfsense = {
+      url             = "$(op read 'op://Infrastructure/pfSense/url')"
+      username        = "$(op read 'op://Infrastructure/pfSense/username')"
+      password        = "$(op read 'op://Infrastructure/pfSense/password')"
+      tls_skip_verify = true
     }
     EOF
     echo "Generated {{ infra_dir }}/secrets.auto.tfvars"
