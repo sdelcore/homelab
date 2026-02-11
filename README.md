@@ -5,6 +5,7 @@ Infrastructure-as-code for deploying NixOS Docker hosts on Proxmox using OpenTof
 ## Overview
 
 - **OpenTofu**: Provisions VMs on Proxmox (downloads Debian cloud image, creates VMs with cloud-init)
+- **pfSense**: DNS and DHCP management via OpenTofu (marshallford/pfsense provider)
 - **nixos-anywhere**: Installs NixOS over SSH onto provisioned Debian VMs (uses disko for disk partitioning)
 - **NixOS + Colmena**: Configuration management and secrets deployment for all VMs
 - **1Password**: Secrets management via `op` CLI
@@ -28,11 +29,14 @@ All VM definitions live in a single Nix attrset in `nixos/flake.nix`. Running `j
 # 1. Allow direnv (loads tools + 1Password secrets)
 direnv allow
 
-# 2. Full deployment (generate -> tofu -> deploy)
-just all
+# 2. Generate secrets and initialize providers (first time only)
+just secrets
+just init
 
-# Or provision a brand new host end-to-end:
-just full <host>   # generate -> tofu -> install <host> -> deploy
+# 3. Day-to-day deployment
+just generate                          # Regenerate artifacts from Nix
+just tofu                              # Apply VM + DNS/DHCP changes
+just deploy                            # Deploy NixOS configs via Colmena
 ```
 
 ## Deployment Workflows
@@ -51,7 +55,7 @@ just tofu                              # Apply VM spec changes
 ```bash
 just generate                          # Regenerate artifacts/hosts.json from Nix
 just tofu                              # Provision VM (Debian cloud image)
-just install <host>                    # Install NixOS via nixos-anywhere (WIPES DISK)
+just provision <host>                  # Install NixOS via nixos-anywhere (WIPES DISK)
 just deploy                            # Deploy config via Colmena
 ```
 
@@ -129,5 +133,6 @@ GPU VMs require:
 - [Colmena Manual](https://colmena.cli.rs/unstable/)
 - [NixOS Manual](https://nixos.org/manual/nixos/stable/)
 - [bpg/proxmox Terraform Provider](https://registry.terraform.io/providers/bpg/proxmox/latest/docs)
+- [marshallford/pfsense Terraform Provider](https://registry.terraform.io/providers/marshallford/pfsense/latest/docs)
 - [nixos-anywhere](https://github.com/nix-community/nixos-anywhere)
 - [disko](https://github.com/nix-community/disko)

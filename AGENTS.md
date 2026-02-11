@@ -6,6 +6,7 @@ Instructions for AI coding agents working in this repository.
 
 Infrastructure-as-code for deploying NixOS Docker hosts on Proxmox using:
 - **OpenTofu**: VM provisioning (downloads Debian cloud image, creates VMs)
+- **pfSense**: DNS and DHCP management via OpenTofu (marshallford/pfsense provider)
 - **nixos-anywhere**: Installs NixOS over SSH onto Debian VMs (uses disko for partitioning)
 - **NixOS + Colmena**: Configuration management for all VMs
 - **1Password**: Secrets management via `op` CLI
@@ -20,10 +21,6 @@ direnv allow
 # List all available commands
 just
 
-# Full deployment
-just all                               # generate -> tofu -> deploy (daily use)
-just full <host>                       # generate -> tofu -> install <host> -> deploy
-
 # Generate artifacts from Nix definitions
 just generate                          # Generate artifacts/hosts.json from nixos/flake.nix
 
@@ -32,9 +29,12 @@ just init                              # Initialize providers
 just plan                              # Preview changes
 just tofu                              # Apply all changes
 
-# nixos-anywhere (install NixOS on a Debian VM - WIPES DISK!)
-just install <host>                    # Install on single host
-just install-all                       # Install on all hosts
+# nixos-anywhere (provision NixOS on a Debian VM - WIPES DISK!)
+just provision <host>                  # Provision single host
+just provision-all                     # Provision all hosts
+
+# Secrets
+just secrets                           # Generate secrets.auto.tfvars from 1Password
 
 # Colmena (NixOS configuration)
 just deploy                            # Deploy to all hosts (with GPU fix)
@@ -153,7 +153,7 @@ nixos/flake.nix (hosts defined as Nix attrset)
   |
   +-> `just generate` runs `nix eval --json .#terraformHosts > artifacts/hosts.json`
   +-> `just tofu` runs OpenTofu which reads artifacts/hosts.json
-  +-> `just install <host>` runs nixos-anywhere
+  +-> `just provision <host>` runs nixos-anywhere
   +-> `just deploy` runs colmena apply + GPU fix
 ```
 
@@ -194,10 +194,8 @@ nixos/flake.nix (hosts defined as Nix attrset)
    ```bash
    just generate                          # Regenerate artifacts/hosts.json
    just tofu                              # Provision VM (Debian)
-   just install newvm                     # Install NixOS via nixos-anywhere
+   just provision newvm                   # Install NixOS via nixos-anywhere
    just deploy                            # Deploy config via Colmena
-   # Or all at once:
-   just full newvm
    ```
 
 ## Secrets Management

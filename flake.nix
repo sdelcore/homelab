@@ -36,11 +36,6 @@
         ];
 
         shellHook = ''
-          echo ""
-          echo "=== Homelab Development Environment ==="
-          echo ""
-          echo "Run 'just' to see available commands"
-          echo ""
         '';
       };
     };
