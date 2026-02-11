@@ -4,22 +4,13 @@
 
 output "nixos_vms" {
   description = "Map of NixOS VM information"
-  value = merge(
-    {
-      for name, vm in proxmox_virtual_environment_vm.nixos_vm : name => {
-        vm_id = vm.vm_id
-        name  = vm.name
-        ip    = local.hosts_config.hosts[name].ip
-      }
-    },
-    {
-      for name, vm in proxmox_virtual_environment_vm.nixos_gpu_vm : name => {
-        vm_id = vm.vm_id
-        name  = vm.name
-        ip    = local.hosts_config.hosts[name].ip
-      }
+  value = {
+    for name, vm in proxmox_virtual_environment_vm.nixos_vm : name => {
+      vm_id = vm.vm_id
+      name  = vm.name
+      ip    = local.hosts_config.hosts[name].ip
     }
-  )
+  }
 }
 
 # =============================================================================

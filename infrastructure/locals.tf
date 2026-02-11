@@ -23,7 +23,7 @@ locals {
   nfs_docker_data = "docker-data"
 
   # ---------------------------------------------------------------------------
-  # Non-GPU VMs
+  # All NixOS VMs (GPU and non-GPU)
   # ---------------------------------------------------------------------------
   nixos_vms = {
     for name, host in local.hosts_config.hosts : name => {
@@ -35,30 +35,15 @@ locals {
       memory      = host.memory
       disk_gb     = host.disk
       domain      = host.domain
-    } if !host.gpu
+      gpu         = host.gpu
+      gpu_id      = try(host.gpuId, null)
+    }
   }
 
   # ---------------------------------------------------------------------------
   # Unique Proxmox nodes (for downloading cloud image once per node)
   # ---------------------------------------------------------------------------
   proxmox_nodes = toset([for name, host in local.hosts_config.hosts : host.node])
-
-  # ---------------------------------------------------------------------------
-  # GPU VMs (with PCI passthrough)
-  # ---------------------------------------------------------------------------
-  nixos_gpu_vms = {
-    for name, host in local.hosts_config.hosts : name => {
-      node        = host.node
-      vm_id       = host.vmId
-      ip          = "${host.ip}/${local.hosts_config.network.prefixLength}"
-      mac_address = host.mac
-      cores       = host.cores
-      memory      = host.memory
-      disk_gb     = host.disk
-      domain      = host.domain
-      gpu_id      = host.gpuId
-    } if host.gpu
-  }
 }
 
 # =============================================================================
