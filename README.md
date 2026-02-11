@@ -62,7 +62,7 @@ just deploy                            # Deploy config via Colmena
 ### Targeting Specific Hosts
 
 ```bash
-# OpenTofu
+# OpenTofu (all VMs, including GPU, use nixos_vm)
 tofu apply -target='proxmox_virtual_environment_vm.nixos_vm["arr"]'
 tofu apply -replace='proxmox_virtual_environment_vm.nixos_vm["arr"]'  # Recreate
 
@@ -123,10 +123,12 @@ journalctl -u <stack>-stack.service
 
 ### GPU Passthrough Issues
 
-GPU VMs require:
+GPU VMs use a unified resource (`proxmox_virtual_environment_vm.nixos_vm`) that automatically configures:
 - `machine = "q35"` for PCIe passthrough
 - `rombar = false` for NVIDIA cards
-- Local storage (not NFS) for reliability
+- Minimal VGA memory (16MB) for console access
+
+Set `gpu = true` and `gpuId` in the host definition — no separate resource needed. Ensure the PCI resource mapping exists in Proxmox UI before applying.
 
 ## References
 

@@ -183,6 +183,14 @@ nixos/flake.nix (hosts defined as Nix attrset)
      gpu = false;
    };
    ```
+   For GPU VMs, set `gpu = true` and add `gpuId`:
+   ```nix
+   newgpuvm = {
+     # ...same fields...
+     gpu = true;
+     gpuId = "0000:01:00";  # PCI device ID from Proxmox
+   };
+   ```
 
 2. Create host config at `nixos/hosts/newvm.nix`
 
@@ -215,7 +223,8 @@ nixos/flake.nix (hosts defined as Nix attrset)
 - **Traefik per VM**: Each stack runs its own Traefik for subdomain routing
 - **NFS backup**: Configs at `/opt/stacks/<stack>/config/` synced hourly to NFS
 - **Docker TCP**: Enable on VMs needing remote discovery (Homepage)
-- **GPU VMs**: Require `gpu = true` and `gpuId` in hosts attrset
+- **Unified VM resource**: All VMs (GPU and non-GPU) use a single `proxmox_virtual_environment_vm.nixos_vm` resource with conditionals for `machine`, `vga.memory`, `tags`, and `dynamic "hostpci"`
+- **GPU VMs**: Require `gpu = true` and `gpuId` in hosts attrset; the unified resource automatically sets q35 machine type, minimal VGA memory, and PCI passthrough
 
 ## Common Gotchas
 
