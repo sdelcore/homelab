@@ -28,6 +28,9 @@ Thumbs.db
 # Logs
 *.log
 
+# Generated artifacts
+artifacts/*.json
+
 # Nix/Direnv
 .direnv/
 .envrc

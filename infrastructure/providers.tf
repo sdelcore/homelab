@@ -1,7 +1,7 @@
 provider "proxmox" {
-  endpoint  = var.proxmox_api_url
-  api_token = "${var.proxmox_api_token_id}=${var.proxmox_api_token_secret}"
-  insecure  = var.proxmox_tls_insecure
+  endpoint  = var.proxmox.api_url
+  api_token = "${var.proxmox.api_token_id}=${var.proxmox.api_token_secret}"
+  insecure  = var.proxmox.tls_insecure
 
   ssh {
     agent    = true

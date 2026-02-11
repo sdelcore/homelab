@@ -1,0 +1,16 @@
+# Proxmox connection (generate with `just init-secrets`)
+# proxmox = {
+#   api_url          = "https://proxmox.local:8006"
+#   api_token_id     = "terraform@pve!terraform-token"
+#   api_token_secret = "your-token-secret"
+#   tls_insecure     = true
+# }
+
+vm = {
+  storage = "local-lvm"
+  bridge  = "vmbr0"
+}
+
+ssh_public_keys = [
+  "ssh-ed25519 AAAA...",
+]

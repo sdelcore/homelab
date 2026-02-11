@@ -5,10 +5,11 @@ Instructions for AI coding agents working in this repository.
 ## Project Overview
 
 Infrastructure-as-code for deploying NixOS Docker hosts on Proxmox using:
-- **OpenTofu**: VM provisioning (clones Debian cloud image templates)
+- **OpenTofu**: VM provisioning (downloads Debian cloud image, creates VMs)
 - **nixos-anywhere**: Installs NixOS over SSH onto Debian VMs (uses disko for partitioning)
 - **NixOS + Colmena**: Configuration management for all VMs
 - **1Password**: Secrets management via `op` CLI
+- **Justfile**: Task orchestration (replaces deploy scripts)
 
 ## Build/Deploy Commands
 
@@ -16,32 +17,41 @@ Infrastructure-as-code for deploying NixOS Docker hosts on Proxmox using:
 # Enter development environment (required - loads tools + 1Password secrets)
 direnv allow
 
+# List all available commands
+just
+
 # Full deployment
-./scripts/deploy.sh                                  # tofu + colmena (daily use)
-./scripts/deploy.sh --nixos-anywhere                 # tofu + nixos-anywhere ALL + colmena
-./scripts/deploy.sh --nixos-anywhere-on tools        # tofu + nixos-anywhere single host + colmena
-./scripts/deploy.sh --colmena-only                   # NixOS configs only
-./scripts/deploy.sh --tofu-only                      # VM provisioning only
+just all                               # generate -> tofu -> deploy (daily use)
+just full <host>                       # generate -> tofu -> install <host> -> deploy
 
-# One-time setup: create Debian cloud image template on Proxmox
-./scripts/setup-cloud-template.sh
+# Generate artifacts from Nix definitions
+just generate                          # Generate artifacts/hosts.json from nixos/flake.nix
 
-# OpenTofu (VM provisioning) - run from infrastructure/
-tofu init                              # Initialize providers
-tofu plan                              # Preview changes
-tofu apply                             # Apply all changes
+# OpenTofu (VM provisioning)
+just init                              # Initialize providers
+just plan                              # Preview changes
+just tofu                              # Apply all changes
+
+# nixos-anywhere (install NixOS on a Debian VM - WIPES DISK!)
+just install <host>                    # Install on single host
+just install-all                       # Install on all hosts
+
+# Colmena (NixOS configuration)
+just deploy                            # Deploy to all hosts (with GPU fix)
+just deploy-on <host>                  # Deploy to specific host
+just upload-keys                       # Update secrets only
+
+# Utility
+just info                              # Show host IPs and domains
+just validate                          # Check artifacts/hosts.json is valid
+
+# Manual OpenTofu commands (run from infrastructure/)
 tofu apply -target='proxmox_virtual_environment_vm.nixos_vm["arr"]'  # Single VM
 tofu apply -replace='proxmox_virtual_environment_vm.nixos_vm["arr"]' # Recreate VM
 
-# Colmena (NixOS configuration) - run from nixos/
+# Manual Colmena commands (run from nixos/)
 colmena build                          # Build without deploying
-colmena apply                          # Deploy to all hosts
-colmena apply --on arr                 # Deploy to specific host
 colmena apply --on @media              # Deploy by tag
-colmena upload-keys                    # Update secrets only
-
-# nixos-anywhere (install NixOS on a Debian VM)
-nixos-anywhere --flake ./nixos#tools root@10.0.0.21
 
 # Build NixOS config for a host (verify it compiles)
 nix build ./nixos#nixosConfigurations.tools.config.system.build.toplevel
@@ -51,13 +61,21 @@ nix build ./nixos#nixosConfigurations.tools.config.system.build.toplevel
 
 No automated test suite exists. Validation is done via:
 ```bash
-tofu plan                              # Check OpenTofu changes
-tofu validate                          # Validate HCL syntax
-colmena build                          # Verify NixOS configs compile
-nix flake check                        # Check flake validity
+just plan                              # Check OpenTofu changes
+just validate                          # Validate generated JSON
+colmena build                          # Verify NixOS configs compile (run from nixos/)
+nix flake check                        # Check flake validity (run from nixos/)
+nix eval --json .#terraformHosts       # Verify terraform output (run from nixos/)
 ```
 
 ## Code Style Guidelines
+
+### Justfile
+- Use `set shell := ["bash", "-euo", "pipefail", "-c"]` for strict mode
+- Color-coded output matching the log_info/log_warn/log_error/log_step pattern
+- Use shebang recipes (`#!/usr/bin/env bash`) for multi-line bash logic
+- Use `@` prefix for quiet commands (e.g., echo statements)
+- Define directory variables at the top with `justfile_directory()`
 
 ### Shell Scripts (.sh)
 - Shebang: `#!/usr/bin/env bash`
@@ -80,7 +98,6 @@ nix flake check                        # Check flake validity
 - Naming: `proxmox_virtual_environment_vm.nixos_vm["name"]`
 - Always include `description` attributes for resources
 - Use `lifecycle { ignore_changes = [...] }` for fields managed elsewhere
-- Template files in `templates/` with `.tpl` extension
 
 ### Nix (.nix)
 - Section headers with `# ============` separator lines
@@ -113,15 +130,32 @@ nix flake check                        # Check flake validity
 
 | Directory | Purpose |
 |-----------|---------|
-| `nixos/hosts.json` | **Single source of truth** for all VM definitions |
-| `infrastructure/` | OpenTofu IaC (VM provisioning) |
-| `infrastructure/templates/` | Cloud-init templates (reference only, not deployed) |
-| `nixos/` | NixOS + Colmena configuration |
+| `nixos/flake.nix` | **Single source of truth** for all VM definitions (hosts attrset) |
+| `nixos/lib/` | Host wiring, validation, and flake output generation |
+| `nixos/lib/hosts.nix` | Entry point: shared modules, validation, delegates to outputs |
+| `nixos/lib/hosts/modules.nix` | Host validation + NixOS module assembly |
+| `nixos/lib/hosts/outputs.nix` | Generates nixosConfigurations, colmenaHive, terraformHosts |
 | `nixos/hosts/` | Per-host NixOS configurations |
 | `nixos/modules/` | Reusable NixOS modules (base, disko, docker-stack, etc.) |
 | `nixos/stacks/` | Docker Compose stacks (deployed via Colmena) |
-| `scripts/` | Deployment automation scripts |
-| `docs/` | Additional documentation (cloud-init troubleshooting, etc.) |
+| `artifacts/` | Generated files (hosts.json for OpenTofu, created by `just generate`) |
+| `infrastructure/` | OpenTofu IaC (VM provisioning, reads `artifacts/hosts.json`) |
+| `Justfile` | Task orchestration (replaces deploy.sh) |
+
+## Data Flow
+
+```
+nixos/flake.nix (hosts defined as Nix attrset)
+  |
+  +-> nixos/lib/hosts.nix (validates, wires shared modules)
+  |     +-> nixos/lib/hosts/modules.nix (validateHost, mkHostConfig)
+  |     +-> nixos/lib/hosts/outputs.nix (nixosConfigurations, colmenaHive, terraformHosts)
+  |
+  +-> `just generate` runs `nix eval --json .#terraformHosts > artifacts/hosts.json`
+  +-> `just tofu` runs OpenTofu which reads artifacts/hosts.json
+  +-> `just install <host>` runs nixos-anywhere
+  +-> `just deploy` runs colmena apply + GPU fix
+```
 
 ## Naming Conventions
 
@@ -129,25 +163,25 @@ nix flake check                        # Check flake validity
 - **Stack names**: match VM names
 - **NixOS hosts**: `nixos/hosts/<vmname>.nix`
 - **1Password secrets**: `env-<stackname>-stack` in Infrastructure vault
-- **IP addresses**: 10.0.0.XX/24 (see hosts.json for allocations)
+- **IP addresses**: 10.0.0.XX/24 (see hosts attrset in `nixos/flake.nix`)
 - **MAC addresses**: `BC:24:11:00:00:XX` prefix
 
 ## Adding a New NixOS VM
 
-1. Add VM to `nixos/hosts.json`:
-   ```json
-   "newvm": {
-     "ip": "10.0.0.XX",
-     "mac": "BC:24:11:00:00:XX",
-     "node": "strongmad",
-     "vmId": 205,
-     "cores": 2,
-     "memory": 2048,
-     "disk": 30,
-     "domain": "newvm.tap",
-     "tags": ["docker", "nixos"],
-     "gpu": false
-   }
+1. Add VM to the `hosts` attrset in `nixos/flake.nix`:
+   ```nix
+   newvm = {
+     ip = "10.0.0.XX";
+     mac = "BC:24:11:00:00:XX";
+     node = "strongmad";
+     vmId = 206;
+     cores = 2;
+     memory = 2048;
+     disk = 30;
+     domain = "newvm.tap";
+     tags = [ "docker" "nixos" ];
+     gpu = false;
+   };
    ```
 
 2. Create host config at `nixos/hosts/newvm.nix`
@@ -158,8 +192,12 @@ nix flake check                        # Check flake validity
 
 5. Deploy:
    ```bash
-   tofu apply                                          # Provision VM (Debian)
-   ./scripts/deploy.sh --nixos-anywhere-on newvm       # Install NixOS + configure
+   just generate                          # Regenerate artifacts/hosts.json
+   just tofu                              # Provision VM (Debian)
+   just install newvm                     # Install NixOS via nixos-anywhere
+   just deploy                            # Deploy config via Colmena
+   # Or all at once:
+   just full newvm
    ```
 
 ## Secrets Management
@@ -170,24 +208,27 @@ nix flake check                        # Check flake validity
 
 ## Key Architecture Patterns
 
-- **Single source of truth**: All VM config (IP, MAC, resources) defined in `nixos/hosts.json`
-- **Debian template + nixos-anywhere**: VMs boot Debian via cloud-init, then nixos-anywhere installs NixOS over SSH
+- **Single source of truth**: All VM config (IP, MAC, resources) defined as Nix attrset in `nixos/flake.nix`
+- **Generated artifacts**: `just generate` produces `artifacts/hosts.json` from Nix definitions for OpenTofu
+- **Debian cloud image + nixos-anywhere**: OpenTofu downloads the Debian cloud image and creates VMs (cloud-init for SSH+IP), then nixos-anywhere installs NixOS over SSH
 - **Disko**: Declarative disk partitioning (GPT + BIOS boot + ext4 root) shared across all VMs
-- **Shared NixOS modules**: `sharedModules` and `mkHostConfig` in flake.nix are used by both `nixosConfigurations` (nixos-anywhere) and `colmenaHive`
+- **Shared NixOS modules**: `sharedModules` in `nixos/lib/hosts.nix` used by both `nixosConfigurations` and `colmenaHive`
+- **Host wiring**: `nixos/lib/hosts/modules.nix` validates hosts and assembles per-host module lists
 - **Traefik per VM**: Each stack runs its own Traefik for subdomain routing
 - **NFS backup**: Configs at `/opt/stacks/<stack>/config/` synced hourly to NFS
 - **Docker TCP**: Enable on VMs needing remote discovery (Homepage)
-- **GPU VMs**: Require `gpu: true` and `gpuId` in hosts.json
+- **GPU VMs**: Require `gpu = true` and `gpuId` in hosts attrset
 
 ## Common Gotchas
 
-- Cloud-init only runs on first boot; recreate VM for cloud-init config changes
+- Cloud-init only runs on first boot; recreate VM (`tofu apply -replace=...`) for cloud-init config changes
 - nixos-anywhere wipes disks — use with caution on existing VMs
-- After nixos-anywhere, host SSH keys change — `ssh-keygen -R <ip>` (deploy.sh does this automatically)
+- After nixos-anywhere, host SSH keys change — `ssh-keygen -R <ip>` (Justfile does this automatically)
 - NVIDIA GPU passthrough requires `rombar = false`
 - After IP reuse, clear SSH known_hosts: `ssh-keygen -R <ip>`
 - New files in nixos/ must be `git add`ed before `colmena build` (Nix flakes only see tracked files)
 - `networking.usePredictableInterfaceNames = false` is in `base.nix` — required for `eth0` references
+- Run `just generate` after changing host definitions before running `just tofu` or `just plan`
 
 ## Stack-Specific Configuration
 

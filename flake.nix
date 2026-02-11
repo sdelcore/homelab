@@ -2,7 +2,7 @@
   description = "Homelab infrastructure development environment";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
     colmena.url = "github:zhaofengli/colmena";
   };
 
@@ -24,6 +24,9 @@
           colmena.packages.${system}.colmena
           nixos-anywhere
 
+          # Task runner
+          just
+
           # Utilities
           jq
           zstd # For decompressing VMA images
@@ -36,19 +39,7 @@
           echo ""
           echo "=== Homelab Development Environment ==="
           echo ""
-          echo "Deployment commands:"
-          echo "  ./scripts/deploy.sh              Full deployment (image + tofu + colmena)"
-          echo "  ./scripts/deploy.sh --colmena-only   Deploy NixOS configs only"
-          echo "  ./scripts/upload-nixos-image.sh  Build and upload NixOS image"
-          echo ""
-          echo "Individual tools:"
-          echo "  colmena apply                    Deploy NixOS configurations"
-          echo "  colmena apply --on arr           Deploy to specific host"
-          echo "  colmena build                    Build without deploying"
-          echo "  tofu apply                       Provision VMs"
-          echo ""
-          echo "NixOS image:"
-          echo "  cd nixos && nix build .#proxmox-image"
+          echo "Run 'just' to see available commands"
           echo ""
         '';
       };
